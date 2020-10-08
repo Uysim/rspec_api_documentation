@@ -127,15 +127,21 @@ module RspecApiDocumentation
 
       def extract_schema(fields)
         schema = {type: 'object', properties: {}}
-
         fields.each do |field|
           current = schema
           if field[:scope]
             [*field[:scope]].each do |scope|
-              current[:properties][scope] ||= {type: 'object', properties: {}}
-              current = current[:properties][scope]
+              if field[:scope_type] == 'array'
+                current[:properties][scope] ||= {type: 'array', items: { type: 'object' }}
+                current[:properties][scope][:items][:properties] ||= {}
+                current = current[:properties][scope][:items]
+              else
+                current[:properties][scope] ||= {type: 'object', properties: {}}
+                current = current[:properties][scope]
+              end
             end
           end
+
           current[:properties][field[:name]] = {type: field[:type] || OpenApi::Helper.extract_type(field[:value])}
           current[:properties][field[:name]][:example] = field[:value] if field[:value] && field[:with_example]
           current[:properties][field[:name]][:default] = field[:default] if field[:default]
@@ -159,7 +165,7 @@ module RspecApiDocumentation
       end
 
       def extract_parameters(example)
-        parameters = example.extended_parameters.uniq { |parameter| parameter[:name] }
+        parameters = example.extended_parameters.uniq { |parameter| [parameter[:name], parameter[:scope]]  }
 
         extract_known_parameters(parameters.select { |p| !p[:in].nil? }) +
           extract_unknown_parameters(example, parameters.select { |p| p[:in].nil? })
